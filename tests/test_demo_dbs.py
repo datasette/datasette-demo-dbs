@@ -1,5 +1,6 @@
 from pathlib import Path
 import pytest
+import sqlite3
 import httpx
 from datasette.app import Datasette
 
@@ -39,9 +40,8 @@ async def test_downloads_and_adds_database(tmp_path, httpx_mock):
 
 @pytest.mark.asyncio
 async def test_skips_download_if_db_exists(tmp_path, httpx_mock):
-    # Create an existing .db file before startup
     db_file = tmp_path / "demo.db"
-    db_file.write_bytes(b"ALREADY THERE")
+    sqlite3.connect(str(db_file)).execute("CREATE TABLE test (id INTEGER PRIMARY KEY)")
 
     datasette = Datasette(
         [],
@@ -61,8 +61,9 @@ async def test_skips_download_if_db_exists(tmp_path, httpx_mock):
     # No HTTP requests should have been made because file already existed
     assert len(httpx_mock.get_requests()) == 0
 
-    # File should remain unchanged
-    assert db_file.read_bytes() == b"ALREADY THERE"
+    # Table should be present
+    response = await datasette.client.get("/demo/test")
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
