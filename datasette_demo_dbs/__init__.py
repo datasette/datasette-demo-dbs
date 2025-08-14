@@ -31,24 +31,21 @@ async def startup(datasette):
     config = get_config(datasette)
     for demo_db in config.demo_dbs:
         db_path = config.path / (demo_db.name + ".db")
-        if db_path.exists():
-            continue
         deleted_path = db_path.with_suffix(".deleted")
-        if deleted_path.exists():
-            continue
-
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(demo_db.url)
-            response.raise_for_status()
-
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(db_path, "wb") as f:
-            f.write(response.content)
-
-        datasette.add_database(
-            Database(
-                datasette,
-                path=str(db_path),
-            ),
-            name=demo_db.name,
-        )
+        if not db_path.exists() and not deleted_path.exists():
+            # Download and save the database
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            async with httpx.AsyncClient(follow_redirects=True, timeout=None) as client:
+                async with client.stream("GET", demo_db.url) as response:
+                    response.raise_for_status()
+                    with open(db_path, "wb") as fp:
+                        async for chunk in response.aiter_bytes(chunk_size=8192):
+                            fp.write(chunk)
+        if db_path.exists() and demo_db.name not in datasette.databases:
+            datasette.add_database(
+                Database(
+                    datasette,
+                    path=str(db_path),
+                ),
+                name=demo_db.name,
+            )

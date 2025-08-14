@@ -3,14 +3,31 @@ import pytest
 import sqlite3
 import httpx
 from datasette.app import Datasette
+from distutils.file_util import write_file
 
 TEST_URL = "https://example.com/demo.db"
+
+DEMO_DB_BYTES = (
+    b"SQLite format 3"
+    + bytes.fromhex(
+        "00 10 00 01 01 00 40 20 20 00 00 00 01 00 00 00 02 00 00 00 00 00 00 "
+        "00 00 00 00 00 01 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 01 00 "
+        "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 "
+        "00 00 00 00 00 00 00 00 00 00 00 01 00 2e 66 e9 0d 00 00 00 01 0f c0 "
+        "00 0f c0"
+    )
+    + (b"\x00" * 3922)
+    + bytes.fromhex("3e 01 06 17 15 15 01 61 74 61 62 6c 65 74 65 73 74 74 65 73 74 02")
+    + b"CREATE TABLE test (id INTEGER PRIMARY KEY)"
+    + bytes.fromhex("0d 00 00 00 00 10")
+    + (b"\x00" * 4090)
+)
 
 
 @pytest.mark.asyncio
 async def test_downloads_and_adds_database(tmp_path, httpx_mock):
     # remote returns some bytes for the .db
-    httpx_mock.add_response(url=TEST_URL, content=b"FAKE SQL LITE BYTES")
+    httpx_mock.add_response(url=TEST_URL, content=DEMO_DB_BYTES)
 
     datasette = Datasette(
         [],
@@ -36,12 +53,15 @@ async def test_downloads_and_adds_database(tmp_path, httpx_mock):
     db_obj = datasette.databases["demo"]
     # database path attribute is expected to include the filename
     assert str(db_file) in getattr(db_obj, "path", str(db_obj))
+    # request should 200
+    response = await datasette.client.get("/demo/test")
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_skips_download_if_db_exists(tmp_path, httpx_mock):
     db_file = tmp_path / "demo.db"
-    sqlite3.connect(str(db_file)).execute("CREATE TABLE test (id INTEGER PRIMARY KEY)")
+    db_file.write_bytes(DEMO_DB_BYTES)
 
     datasette = Datasette(
         [],

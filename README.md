@@ -50,9 +50,9 @@ Equivalent metadata.json:
 
 On Datasette startup, for each entry in `dbs`:
 
-1. If `path/<name>.db` already exists, it is left as-is.
+1. If `path/<name>.db` already exists, it is left as-is and loaded into Datasette.
 2. If a marker file `path/<name>.deleted` exists, the download is skipped.
-3. Otherwise, the plugin downloads the content from the URL (following redirects), writes it to `path/<name>.db`, and registers that database in Datasette under the given name.
+3. Otherwise, the plugin downloads the content from the URL (following redirects), streams it to `path/<name>.db`, and registers that database in Datasette under the given name.
 
 ## Development
 
